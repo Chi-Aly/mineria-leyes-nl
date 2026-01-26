@@ -1,66 +1,82 @@
 import requests
+from bs4 import BeautifulSoup
 import os
-import pdfplumber
 import json
-from datetime import datetime
+import datetime
+import pdfplumber
 
+# -------------------------------
+# CONFIGURACIÓN
+# -------------------------------
 BASE_URL = "https://www.hcnl.gob.mx/trabajo_legislativo/leyes/"
-CARPETA_PDFS = "pdfs"
-CARPETA_JSON = "json"
+CARPETA_PDFS = "datos/pdfs"
+CARPETA_JSON = "datos/json"
 
 os.makedirs(CARPETA_PDFS, exist_ok=True)
 os.makedirs(CARPETA_JSON, exist_ok=True)
 
-print("📥 Descargando lista de PDFs...")
+FECHA_HOY = datetime.date.today().isoformat()
 
-html = requests.get(BASE_URL).text
+# -------------------------------
+# OBTENER LINKS DE PDFs
+# -------------------------------
+print("🔍 Obteniendo lista de leyes...")
 
-# Extraer enlaces PDF
-import re
-pdf_links = re.findall(r'href="(.*?\.pdf)"', html)
+respuesta = requests.get(BASE_URL)
+soup = BeautifulSoup(respuesta.text, "html.parser")
 
-print(f"📄 PDFs encontrados: {len(pdf_links)}")
+links_pdf = [
+    a["href"] for a in soup.find_all("a", href=True)
+    if a["href"].endswith(".pdf")
+]
 
-for link in pdf_links:
-    nombre_pdf = link.split("/")[-1]
+print(f"📄 PDFs encontrados: {len(links_pdf)}")
+
+# -------------------------------
+# PROCESAR PDFs
+# -------------------------------
+resultados = []
+
+for i, link in enumerate(links_pdf, start=1):
+    url_pdf = link if link.startswith("http") else f"https://www.hcnl.gob.mx{link}"
+    nombre_pdf = url_pdf.split("/")[-1]
     ruta_pdf = os.path.join(CARPETA_PDFS, nombre_pdf)
 
-    if os.path.exists(ruta_pdf):
-        continue
+    print(f"⬇️ ({i}) Descargando {nombre_pdf}")
 
-    print(f"⬇️ Descargando {nombre_pdf}")
-    r = requests.get(link)
+    pdf_data = requests.get(url_pdf)
     with open(ruta_pdf, "wb") as f:
-        f.write(r.content)
+        f.write(pdf_data.content)
 
-print("✅ Descarga terminada")
-
-print("\n📖 Procesando PDFs...")
-
-for archivo in os.listdir(CARPETA_PDFS):
-    if not archivo.endswith(".pdf"):
-        continue
-
-    ruta_pdf = os.path.join(CARPETA_PDFS, archivo)
-
+    # -------------------------------
+    # EXTRAER DATOS DEL PDF
+    # -------------------------------
     with pdfplumber.open(ruta_pdf) as pdf:
+        num_paginas = len(pdf.pages)
         texto = ""
-        for p in pdf.pages:
-            if p.extract_text():
-                texto += p.extract_text() + "\n"
 
-    data = {
-        "archivo": archivo,
-        "fecha_extraccion": datetime.now().strftime("%Y-%m-%d"),
-        "paginas": len(pdf.pages),
-        "vigente": "vigente" in texto.lower(),
-        "resumen": texto[:800]
-    }
+        for pagina in pdf.pages[:2]:  # solo primeras 2 páginas
+            extraido = pagina.extract_text()
+            if extraido:
+                texto += extraido + "\n"
 
-    nombre_json = archivo.replace(".pdf", ".json")
-    ruta_json = os.path.join(CARPETA_JSON, nombre_json)
+    resumen = texto[:500].replace("\n", " ")
 
-    with open(ruta_json, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    resultados.append({
+        "archivo": nombre_pdf,
+        "fecha_descarga": FECHA_HOY,
+        "paginas": num_paginas,
+        "resumen": resumen,
+        "url": url_pdf
+    })
 
-print("✅ JSON generados correctamente")
+# -------------------------------
+# GUARDAR JSON
+# -------------------------------
+archivo_json = os.path.join(CARPETA_JSON, f"leyes_{FECHA_HOY}.json")
+
+with open(archivo_json, "w", encoding="utf-8") as f:
+    json.dump(resultados, f, ensure_ascii=False, indent=2)
+
+print("✅ Proceso finalizado")
+print(f"📁 Archivo generado: {archivo_json}")

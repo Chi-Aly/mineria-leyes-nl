@@ -24,7 +24,4 @@ jobs:
 
     - name: Ejecutar script
       run: |
-            python mineria_leyes.py
-      run: |
-        python mineria_leyes.py
         python mineria_leyes.py

@@ -20,7 +20,9 @@ jobs:
 
     - name: Instalar dependencias
       run: |
-        pip install pdfplumber requests
+        pip install requests beautifulsoup4 pdfplumber
+
+
 
     - name: Ejecutar script
       run: |

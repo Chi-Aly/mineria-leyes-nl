@@ -29,14 +29,13 @@ jobs:
       run: |
         python datos/mineria_leyes.py
 
-    # 🔥 GUARDAR RESULTADOS EN EL REPO
-    - name: Guardar cambios
+    - name: Guardar resultados en GitHub
       run: |
         git config --global user.name "github-actions"
         git config --global user.email "actions@github.com"
 
         git add datos/
 
-        git commit -m "Actualización automática de leyes $(date)" || echo "Sin cambios"
+        git commit -m "Actualización automática leyes $(date)" || echo "Sin cambios"
 
         git push
